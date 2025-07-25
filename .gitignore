@@ -88,3 +88,5 @@ coverage.xml
 # ===================================================================
 # The CML report is generated during the workflow and should not be stored in the repo.
 report.md
+key.json
+key_b64.txt
