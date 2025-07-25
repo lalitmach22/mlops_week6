@@ -7,20 +7,19 @@ on:
 
 # Environment variables available to all jobs and steps
 env:
-  GCP_PROJECT_ID: mlopsweek1
-  GKE_CLUSTER: your-gke-cluster-name # ❗ Replace with your GKE cluster name
-  GKE_ZONE: us-central1              # ❗ Replace with your GKE cluster zone/location
+  GCP_PROJECT_ID: mlopsweek1 # ❗ Replace with your GCP Project ID
+  GKE_CLUSTER: mlopsweek6 # ✅ UPDATED to match your UI configuration
+  GKE_ZONE: us-central1-a # ❗ Verify this is the correct zone for your cluster
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  REPO_NAME: iris-repo               # ❗ Your Artifact Registry repository name
+  REPO_NAME: iris-repo # ❗ The name of the Artifact Registry repo you created
   IMAGE_NAME: iris-api
-  MODEL_BUCKET_URI: gs://mlops-course-mlopsweek1-unique/path/to/your/model.joblib # ❗ Update this path
+  MODEL_BUCKET_URI: gs://mlops-course-mlopsweek1-unique/my-models/iris-classifier-week-1/model.joblib # ✅ UPDATED with your model path
 
 jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
     
-    # Add 'id-token' with 'write' permission for Workload Identity Federation
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -33,13 +32,14 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_ID/providers/YOUR_PROVIDER_ID' # ❗ Replace with your WIF provider
-        service_account: 'your-service-account-email@...iam.gserviceaccount.com' # ❗ Replace with your SA email
+        # ✅ UPDATED with your Project Number
+        workload_identity_provider: 'projects/939999604194/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+        service_account: 'github-actions-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
     - name: Download Model from GCS
       run: |-
-        echo "Downloading model from ${MODEL_BUCKET_URI}"
-        gcloud storage cp "${MODEL_BUCKET_URI}" ./api/model.joblib
+        echo "Downloading model from ${{ env.MODEL_BUCKET_URI }}"
+        gcloud storage cp "${{ env.MODEL_BUCKET_URI }}" ./api/model.joblib
 
     - name: Set up GKE credentials
       uses: google-github-actions/get-gke-credentials@v2
@@ -52,7 +52,7 @@ jobs:
 
     - name: Build and Push Docker image
       run: |-
-        docker build -t ${{ env.ARTI"FACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest ./api
+        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest ./api
         docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest
 
     - name: Deploy to GKE
@@ -62,9 +62,11 @@ jobs:
 
     - name: Create CML Report
       env:
-        # This token is provided by Actions, you don't need to create a secret
         repo_token: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Install CML
+        pip install cml
+
         # Wait for the Load Balancer to get an external IP
         echo "Waiting for external IP..."
         sleep 60 # Wait for 60 seconds
