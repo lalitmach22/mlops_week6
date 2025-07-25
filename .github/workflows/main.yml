@@ -5,36 +5,32 @@ on:
     branches:
       - main
 
-# Environment variables available to all jobs and steps
 env:
-  GCP_PROJECT_ID: mlopsweek1 # ❗ Replace with your GCP Project ID
-  GKE_CLUSTER: mlopsweek6 # ✅ UPDATED to match your UI configuration
-  GKE_ZONE: us-central1-a # ❗ Verify this is the correct zone for your cluster
+  GCP_PROJECT_ID: mlopsweek1
+  GKE_CLUSTER: mlopsweek6
+  GKE_ZONE: us-central1-a
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  REPO_NAME: iris-repo # ❗ The name of the Artifact Registry repo you created
+  REPO_NAME: iris-repo
   IMAGE_NAME: iris-api
-  MODEL_BUCKET_URI: gs://mlops-course-mlopsweek1-unique/my-models/iris-classifier-week-1/model.joblib # ✅ UPDATED with your model path
+  MODEL_BUCKET_URI: gs://mlops-course-mlopsweek1-unique/my-models/iris-classifier-week-1/model.joblib
 
 jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: 'read'
-      id-token: 'write'
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Decode base64 GCP credentials
+      run: |
+        echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 -d > ${{ github.workspace }}/gcp-key.json
+
     - name: Authenticate to Google Cloud
-      id: auth
       uses: google-github-actions/auth@v2
       with:
-        # ✅ UPDATED with your Project Number
-        workload_identity_provider: 'projects/939999604194/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-        service_account: 'github-actions-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+        credentials_json: '${{ github.workspace }}/gcp-key.json'
 
     - name: Download Model from GCS
       run: |-
@@ -52,26 +48,23 @@ jobs:
 
     - name: Build and Push Docker image
       run: |-
-        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest ./api
-        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest
+        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }} .
+        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}
 
     - name: Deploy to GKE
       run: |-
-        # This command applies the configuration. If the deployment exists, it will be updated.
         kubectl apply -f deployment.yaml
 
     - name: Create CML Report
       env:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Install CML
         pip install cml
 
-        # Wait for the Load Balancer to get an external IP
         echo "Waiting for external IP..."
-        sleep 60 # Wait for 60 seconds
+        sleep 60
         EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        
+
         echo "## ✅ Deployment Successful" > report.md
         echo " " >> report.md
         echo "A new version of the Iris API has been deployed." >> report.md
@@ -80,8 +73,7 @@ jobs:
         echo " " >> report.md
         echo "### Test with cURL:" >> report.md
         echo "\`\`\`bash" >> report.md
-        echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
+        echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict' -H 'Content-Type: application/json' -d '{\"sepal_length\":5.1,\"sepal_width\":3.5,\"petal_length\":1.4,\"petal_width\":0.2}'" >> report.md
         echo "\`\`\`" >> report.md
 
-        # Post the report as a comment on the commit
         cml comment create report.md
