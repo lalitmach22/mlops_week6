@@ -1,0 +1,20 @@
+# 1. Use an official Python runtime as a parent image
+FROM python:3.9-slim
+
+# 2. Set the working directory in the container
+WORKDIR /app
+
+# 3. Copy the dependencies file and install them
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 4. Copy the rest of the application code (main.py and the model)
+# The workflow will download model.joblib into this `api` directory before building
+COPY . .
+
+# 5. Expose the port the app runs on
+EXPOSE 8000
+
+# 6. Define the command to run the application
+# Use 0.0.0.0 to make it accessible from outside the container
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

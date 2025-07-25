@@ -1,0 +1,90 @@
+# ===================================================================
+# Python / Virtual Environments
+# ===================================================================
+# Ignore Python virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Ignore Python bytecode and cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore distribution and build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+sdist/
+wheelhouse/
+
+# Ignore package installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ===================================================================
+# Secrets & Environment Variables (IMPORTANT)
+# ===================================================================
+# Never commit secrets, API keys, or credentials.
+# Use environment variables or a secure secret manager instead.
+*.env
+.env*
+secrets.yml
+*.pem
+*.key
+
+# ===================================================================
+# IDEs and Editor-specific files
+# ===================================================================
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ===================================================================
+# Operating System files
+# ===================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===================================================================
+# Logs & Temporary Files
+# ===================================================================
+*.log
+*.log.*
+*.swp
+*~
+
+# ===================================================================
+# Testing & Code Coverage
+# ===================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+
+# ===================================================================
+# CML / CI-CD Artifacts
+# ===================================================================
+# The CML report is generated during the workflow and should not be stored in the repo.
+report.md
