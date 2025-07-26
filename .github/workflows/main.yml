@@ -8,7 +8,7 @@ on:
 env:
   GCP_PROJECT_ID: mlopsweek1
   GKE_CLUSTER: mlopsweek6
-  GKE_ZONE: us-central1-a
+  GKE_REGION: us-central1 # ✅ CORRECTED: Using region instead of zone
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   REPO_NAME: iris-repo
   IMAGE_NAME: iris-api
@@ -44,7 +44,8 @@ jobs:
     - name: Set up GKE credentials
       run: |
         echo "🔗 Configuring kubectl for GKE cluster..."
-        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }} --project ${{ env.GCP_PROJECT_ID }}
+        # ✅ CORRECTED: Using --region flag to connect to the regional cluster
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --region ${{ env.GKE_REGION }} --project ${{ env.GCP_PROJECT_ID }}
         echo "✅ GKE credentials configured."
 
     - name: Configure Docker for Artifact Registry
