@@ -28,7 +28,6 @@ jobs:
       run: |
         echo "🔐 Decoding GCP credentials..."
         echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 -d > ${{ github.workspace }}/gcp-key.json
-        echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > "${HOME}/gcp-key.json"
         echo "✅ Credentials filse created."
 
     - name: Authenticate to Google Cloud
