@@ -24,16 +24,16 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Decode base64 GCP credentials
+    - name: Decode GCP service account key
       run: |
         echo "🔐 Decoding GCP credentials..."
-        echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 --decode > ${{ github.workspace }}/gcp-key.json
-        echo "✅ Credentials filse created."
+        echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 --decode > gcp-key.json
+        echo "✅ Credentials file created."
 
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: '${{ github.workspace }}/gcp-key.json'
+    - name: Authenticate with GCP
+      run: |
+        gcloud auth activate-service-account --key-file=gcp-key.json
+        echo "✅ GCP authenticated."
 
     - name: Download Model from GCS
       run: |
@@ -42,11 +42,10 @@ jobs:
         echo "✅ Model downloaded successfully."
 
     - name: Set up GKE credentials
-      uses: google-github-actions/get-gke-credentials@v2
-      with:
-        cluster_name: ${{ env.GKE_CLUSTER }}
-        location: ${{ env.GKE_ZONE }}
-        project_id: ${{ env.GCP_PROJECT_ID }}
+      run: |
+        echo "🔗 Configuring kubectl for GKE cluster..."
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }} --project ${{ env.GCP_PROJECT_ID }}
+        echo "✅ GKE credentials configured."
 
     - name: Configure Docker for Artifact Registry
       run: |
@@ -57,33 +56,26 @@ jobs:
     - name: Build and Push Docker Image
       run: |
         echo "🔨 Building Docker image..."
-        # Use commit SHA for better traceability
         IMAGE_TAG_SHA="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
         IMAGE_TAG_LATEST="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest"
         
-        # Build the image with both tags
         docker build -t "$IMAGE_TAG_SHA" -t "$IMAGE_TAG_LATEST" .
         
         echo "📤 Pushing Docker images..."
         docker push "$IMAGE_TAG_SHA"
         docker push "$IMAGE_TAG_LATEST"
         
-        echo "✅ Docker images built and pushed successfully."
-        # Export the SHA tag for use in the deployment step
+        echo "✅ Docker images built and pushed."
         echo "IMAGE_TAG_SHA=$IMAGE_TAG_SHA" >> $GITHUB_ENV
 
     - name: Deploy to GKE
       run: |
         echo "🚀 Deploying to GKE..."
-        
-        # Update deployment.yaml to use the specific SHA image tag for traceability
-        echo "🔄 Updating image tag to use SHA: ${{ env.IMAGE_TAG_SHA }}"
         sed -i "s|image: .*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
         
-        echo "📋 Applying updated deployment file:"
+        echo "📋 Applying updated deployment.yaml:"
         cat deployment.yaml
         
-        # Apply the deployment with the updated image
         kubectl apply -f deployment.yaml
         
         echo "⏳ Waiting for deployment rollout to complete..."
@@ -127,11 +119,11 @@ jobs:
         echo "\`\`\`" >> report.md
 
         cml comment create report.md
-        echo "✅ CML report created and posted."
+        echo "✅ CML report posted."
 
     - name: Cleanup credentials
       if: always()
       run: |
         echo "🧹 Cleaning up credentials file..."
-        rm -f ${{ github.workspace }}/gcp-key.json
+        rm -f gcp-key.json
         echo "✅ Cleanup completed."
