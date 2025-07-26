@@ -60,7 +60,8 @@ jobs:
         IMAGE_TAG_SHA="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
         IMAGE_TAG_LATEST="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest"
         
-        docker build -t "$IMAGE_TAG_SHA" -t "$IMAGE_TAG_LATEST" .
+        # ✅ CORRECTED: Changed build context from '.' to './api'
+        docker build -t "$IMAGE_TAG_SHA" -t "$IMAGE_TAG_LATEST" ./api
         
         echo "📤 Pushing Docker images..."
         docker push "$IMAGE_TAG_SHA"
