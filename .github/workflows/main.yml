@@ -2,8 +2,7 @@ name: Build and Deploy Iris API to GKE
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
 # Environment variables available to all jobs and steps
 env:
@@ -19,82 +18,28 @@ jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # Prevent runaway jobs
+    timeout-minutes: 20 # Prevent runaway jobs
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Sanity check required variables
-      run: |
-        echo "🔍 Performing sanity check on environment variables..."
-        for var in GCP_PROJECT_ID GKE_CLUSTER GKE_ZONE ARTIFACT_REGISTRY REPO_NAME IMAGE_NAME MODEL_BUCKET_URI; do
-          if [ -z "${!var}" ]; then
-            echo "❌ Environment variable $var is not set!"
-            exit 1
-          else
-            echo "✅ $var is set"
-          fi
-        done
-        echo "✅ All required environment variables are present"
-
-    - name: Debug - Show environment
-      run: |
-        echo "🔍 Environment Debug Info:"
-        echo "GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}"
-        echo "GKE_CLUSTER: ${{ env.GKE_CLUSTER }}"
-        echo "GKE_ZONE: ${{ env.GKE_ZONE }}"
-        echo "ARTIFACT_REGISTRY: ${{ env.ARTIFACT_REGISTRY }}"
-        echo "REPO_NAME: ${{ env.REPO_NAME }}"
-        echo "IMAGE_NAME: ${{ env.IMAGE_NAME }}"
-        echo "MODEL_BUCKET_URI: ${{ env.MODEL_BUCKET_URI }}"
-        echo "Working directory: $(pwd)"
-        echo "Repository contents:"
-        ls -la
-
     - name: Decode base64 GCP credentials
       run: |
         echo "🔐 Decoding GCP credentials..."
         echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 -d > ${{ github.workspace }}/gcp-key.json
-        echo "✅ Credentials file created"
-        ls -la ${{ github.workspace }}/gcp-key.json
+        echo "✅ Credentials file created."
 
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
         credentials_json: '${{ github.workspace }}/gcp-key.json'
 
-    - name: Debug - Verify GCP authentication
-      run: |
-        echo "🔍 Verifying GCP authentication..."
-        gcloud auth list
-        gcloud config get-value project
-        echo "✅ GCP authentication verified"
-
     - name: Download Model from GCS
       run: |
         echo "📥 Downloading model from ${{ env.MODEL_BUCKET_URI }}"
-        
-        # Check if api directory exists
-        if [ ! -d "./api" ]; then
-          echo "❌ api directory not found!"
-          echo "Current directory contents:"
-          ls -la
-          exit 1
-        fi
-        
-        # Download the model
         gcloud storage cp "${{ env.MODEL_BUCKET_URI }}" ./api/model.joblib
-        
-        # Verify model file exists and is not empty
-        if [ ! -s "./api/model.joblib" ]; then
-          echo "❌ Model file is missing or empty"
-          exit 1
-        fi
-        
-        echo "✅ Model downloaded successfully"
-        echo "📊 Model file info:"
-        ls -la ./api/model.joblib
+        echo "✅ Model downloaded successfully."
 
     - name: Set up GKE credentials
       uses: google-github-actions/get-gke-credentials@v2
@@ -103,92 +48,47 @@ jobs:
         location: ${{ env.GKE_ZONE }}
         project_id: ${{ env.GCP_PROJECT_ID }}
 
-    - name: Debug - Verify kubectl access
-      run: |
-        echo "🔍 Verifying kubectl access..."
-        kubectl cluster-info
-        kubectl get nodes
-        echo "✅ kubectl access verified"
-
     - name: Configure Docker for Artifact Registry
       run: |
         echo "🐳 Configuring Docker for Artifact Registry..."
         gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
-        echo "✅ Docker configured for Artifact Registry"
+        echo "✅ Docker configured."
 
-    - name: Debug - Check Docker and api directory
-      run: |
-        echo "🔍 Checking Docker and api directory..."
-        docker --version
-        echo "API directory contents:"
-        ls -la ./api/
-        echo "Checking for required files:"
-        [ -f "./api/Dockerfile" ] && echo "✅ Dockerfile found" || echo "❌ Dockerfile missing"
-        [ -f "./api/fastapi.py" ] && echo "✅ fastapi.py found" || echo "❌ fastapi.py missing"
-        [ -f "./api/requirements.txt" ] && echo "✅ requirements.txt found" || echo "❌ requirements.txt missing"
-        [ -f "./api/model.joblib" ] && echo "✅ model.joblib found" || echo "❌ model.joblib missing"
-
-    - name: Build and Push Docker image
+    - name: Build and Push Docker Image
       run: |
         echo "🔨 Building Docker image..."
-        
-        # Use commit SHA for better traceability and avoid latest tag collisions
+        # Use commit SHA for better traceability
         IMAGE_TAG_SHA="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
         IMAGE_TAG_LATEST="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest"
         
-        echo "Building image with tags:"
-        echo "  - SHA tag: $IMAGE_TAG_SHA"
-        echo "  - Latest tag: $IMAGE_TAG_LATEST"
-        
         # Build the image with both tags
-        docker build -t "$IMAGE_TAG_SHA" -t "$IMAGE_TAG_LATEST" ./api
+        docker build -t "$IMAGE_TAG_SHA" -t "$IMAGE_TAG_LATEST" .
         
         echo "📤 Pushing Docker images..."
         docker push "$IMAGE_TAG_SHA"
         docker push "$IMAGE_TAG_LATEST"
         
-        echo "✅ Docker images built and pushed successfully"
-        echo "Primary image (SHA): $IMAGE_TAG_SHA"
-        echo "Fallback image (latest): $IMAGE_TAG_LATEST"
-        
-        # Export the SHA tag for use in deployment
+        echo "✅ Docker images built and pushed successfully."
+        # Export the SHA tag for use in the deployment step
         echo "IMAGE_TAG_SHA=$IMAGE_TAG_SHA" >> $GITHUB_ENV
 
     - name: Deploy to GKE
       run: |
         echo "🚀 Deploying to GKE..."
         
-        # Check if deployment.yaml exists
-        if [ ! -f "deployment.yaml" ]; then
-          echo "❌ deployment.yaml not found!"
-          ls -la
-          exit 1
-        fi
+        # Update deployment.yaml to use the specific SHA image tag for traceability
+        echo "🔄 Updating image tag to use SHA: ${{ env.IMAGE_TAG_SHA }}"
+        sed -i "s|image: .*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
         
-        echo "📋 Original deployment file contents:"
+        echo "📋 Applying updated deployment file:"
         cat deployment.yaml
         
-        # Update deployment.yaml to use the specific SHA image tag for traceability
-        echo "🔄 Updating image tag to use SHA: $IMAGE_TAG_SHA"
-        sed "s|image: .*|image: $IMAGE_TAG_SHA|g" deployment.yaml > deployment-updated.yaml
-        
-        echo "📋 Updated deployment file contents:"
-        cat deployment-updated.yaml
-        
         # Apply the deployment with the updated image
-        kubectl apply -f deployment-updated.yaml
+        kubectl apply -f deployment.yaml
         
-        echo "⏳ Waiting for deployment rollout..."
+        echo "⏳ Waiting for deployment rollout to complete..."
         kubectl rollout status deployment/iris-api-deployment --timeout=300s
-        
-        echo "✅ Deployment completed successfully with image: $IMAGE_TAG_SHA"
-
-    - name: Clean up Docker build logs and temporary files
-      run: |
-        echo "🧹 Cleaning up build artifacts..."
-        rm -f deployment-updated.yaml
-        docker system prune -f --volumes || true
-        echo "✅ Cleanup completed"
+        echo "✅ Deployment completed successfully."
 
     - name: Wait for LoadBalancer and Create CML Report
       env:
@@ -197,84 +97,41 @@ jobs:
         echo "📋 Installing CML..."
         pip install cml
         
-        echo "⏳ Waiting for LoadBalancer to get external IP..."
+        echo "⏳ Waiting for LoadBalancer to get an external IP..."
         EXTERNAL_IP=""
-        RETRY_COUNT=0
-        MAX_RETRIES=12  # 12 retries * 30 seconds = 6 minutes max wait
-        
-        while [ -z "$EXTERNAL_IP" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        for i in {1..12}; do
           sleep 30
           EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-          RETRY_COUNT=$((RETRY_COUNT + 1))
-          echo "🔍 Attempt $RETRY_COUNT: External IP = '$EXTERNAL_IP'"
-          
-          # Debug: Show service status
-          kubectl get service iris-api-service
+          if [ -n "$EXTERNAL_IP" ]; then
+            echo "✅ External IP obtained: $EXTERNAL_IP"
+            break
+          fi
+          echo "🔍 Attempt $i: Still waiting for external IP..."
         done
         
         if [ -z "$EXTERNAL_IP" ]; then
-          echo "❌ Failed to get external IP after $MAX_RETRIES attempts"
-          echo "Service status:"
-          kubectl describe service iris-api-service
+          echo "❌ Failed to get external IP after 6 minutes."
           exit 1
-        fi
-        
-        echo "✅ External IP obtained: $EXTERNAL_IP"
-        
-        # Test the API endpoint
-        echo "🧪 Testing API health endpoint..."
-        HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://$EXTERNAL_IP/health" || echo "000")
-        if [ "$HEALTH_CHECK" != "200" ]; then
-          echo "⚠️ API health check failed. HTTP status: $HEALTH_CHECK"
-          echo "API logs:"
-          kubectl logs -l app=iris-api --tail=20
-        else
-          echo "✅ API health check passed!"
         fi
         
         echo "📝 Creating CML report..."
         echo "## ✅ Deployment Successful" > report.md
-        echo " " >> report.md
-        echo "A new version of the Iris API has been deployed and is healthy." >> report.md
+        echo "A new version of the Iris API has been deployed." >> report.md
         echo "- **Commit:** [${GITHUB_SHA::7}](${{ github.event.repository.html_url }}/commit/${{ github.sha }})" >> report.md
-        echo "- **Image Tag:** \`$IMAGE_TAG_SHA\`" >> report.md
+        echo "- **Image Tag:** \`${{ env.IMAGE_TAG_SHA }}\`" >> report.md
         echo "- **API Endpoint:** http://$EXTERNAL_IP" >> report.md
-        echo "- **Health Status:** $([ "$HEALTH_CHECK" = "200" ] && echo "✅ Healthy" || echo "⚠️ Check logs")" >> report.md
-        echo "- **Deployment Time:** $(date -u)" >> report.md
         echo " " >> report.md
         echo "### Test with cURL:" >> report.md
         echo "\`\`\`bash" >> report.md
-        echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
-        echo "\`\`\`" >> report.md
-        echo " " >> report.md
-        echo "### Rollback Command (if needed):" >> report.md
-        echo "\`\`\`bash" >> report.md
-        echo "kubectl rollout undo deployment/iris-api-deployment" >> report.md
+        echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict/' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
         echo "\`\`\`" >> report.md
 
-        # Post the report as a comment on the commit
         cml comment create report.md
-        
-        echo "✅ CML report created and posted!"
+        echo "✅ CML report created and posted."
 
     - name: Cleanup credentials
       if: always()
       run: |
-        echo "🧹 Cleaning up credentials..."
+        echo "🧹 Cleaning up credentials file..."
         rm -f ${{ github.workspace }}/gcp-key.json
-        echo "✅ Cleanup completed"
-
-    # 🔐 FUTURE ENHANCEMENT: OIDC Authentication
-    # To eliminate the need for service account keys, consider using
-    # GitHub Actions OIDC with Workload Identity Federation:
-    # 
-    # 1. Set up Workload Identity Federation in GCP
-    # 2. Replace the "Decode base64 GCP credentials" and "Authenticate to Google Cloud" steps with:
-    #
-    # - name: Authenticate to Google Cloud
-    #   uses: google-github-actions/auth@v2
-    #   with:
-    #     workload_identity_provider: 'projects/PROJECT-NUMBER/locations/global/workloadIdentityPools/POOL-NAME/providers/PROVIDER-NAME'
-    #     service_account: 'SERVICE-ACCOUNT-EMAIL'
-    #
-    # This provides better security by eliminating long-lived credentials.
+        echo "✅ Cleanup completed."

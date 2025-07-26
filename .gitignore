@@ -90,3 +90,4 @@ coverage.xml
 report.md
 key.json
 key_b64.txt
+encoded_key.txt

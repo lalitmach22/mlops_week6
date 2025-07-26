@@ -5,31 +5,100 @@ metadata:
   labels:
     app: iris-api
 spec:
-  replicas: 1
+  # High availability with 2 replicas
+  replicas: 2
   selector:
     matchLabels:
       app: iris-api
+  # Ensure zero-downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels:
         app: iris-api
     spec:
+      # Security best practice: run as a non-root user
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
         - name: iris-api
+          # This image tag will be dynamically updated by the GitHub Actions workflow
           image: us-central1-docker.pkg.dev/mlopsweek1/iris-repo/iris-api:latest
           ports:
-            - containerPort: 8200
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+          # Resource requests and limits for container scheduling and protection
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Environment variables for the application
+          env:
+            - name: MODEL_PATH
+              value: "model.joblib"
+            - name: PORT
+              value: "8200"
+          # Probes to check the health of the application
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 10
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: iris-api-service
+  labels:
+    app: iris-api
+  # Annotations for GKE-specific features like BackendConfig
+  annotations:
+    cloud.google.com/backend-config: '{"default": "iris-api-backendconfig"}'
 spec:
+  type: LoadBalancer
   selector:
     app: iris-api
-  type: LoadBalancer
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
-      targetPort: 8200
+      targetPort: http # Reference the named port from the deployment
+
+---
+# Optional but recommended: BackendConfig for GKE Load Balancer health checks
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: iris-api-backendconfig
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 15
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8200
