@@ -1,9 +1,12 @@
+
+
 import os
 import joblib
 import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+print("Building api for iris model")
 # Define the input data schema using Pydantic
 class IrisInput(BaseModel):
     sepal_length: float
