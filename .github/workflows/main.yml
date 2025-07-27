@@ -18,6 +18,9 @@ jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
+    # ✅ CORRECTED: Grant write permissions to allow CML to post a comment
+    permissions:
+      contents: write
     timeout-minutes: 20 # Prevent runaway jobs
 
     steps:
@@ -132,7 +135,7 @@ jobs:
         echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict/' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
         echo "\`\`\`" >> report.md
 
-        # ✅ CORRECTED: Use npx to run the CML command
+        # Use npx to run the CML command
         npx @dvcorg/cml comment create report.md
         echo "✅ CML report posted."
 
