@@ -95,8 +95,14 @@ jobs:
         kubectl rollout status deployment/iris-api-deployment --timeout=300s
         echo "✅ Deployment completed successfully."
 
-    - name: Get Deployed Service IP
+    - name: Install CML and Report Status
+      env:
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Install CML using npm
+        echo "📋 Installing CML via npm..."
+        npm install -g @dvcorg/cml
+        
         echo "⏳ Waiting for LoadBalancer to get an external IP..."
         EXTERNAL_IP=""
         for i in {1..12}; do
@@ -114,7 +120,21 @@ jobs:
           exit 1
         fi
         
-        echo "🚀 Deployment successful! Your API is available at: http://$EXTERNAL_IP"
+        echo "📝 Creating CML report..."
+        echo "## ✅ Deployment Successful" > report.md
+        echo "A new version of the Iris API has been deployed." >> report.md
+        echo "- **Commit:** [${GITHUB_SHA::7}](${{ github.event.repository.html_url }}/commit/${{ github.sha }})" >> report.md
+        echo "- **Image Tag:** \`${{ env.IMAGE_TAG_SHA }}\`" >> report.md
+        echo "- **API Endpoint:** http://$EXTERNAL_IP" >> report.md
+        echo " " >> report.md
+        echo "### Test with cURL:" >> report.md
+        echo "\`\`\`bash" >> report.md
+        echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict/' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
+        echo "\`\`\`" >> report.md
+
+        # Post the report as a comment on the commit
+        cml comment create report.md
+        echo "✅ CML report posted."
 
     - name: Cleanup credentials
       if: always()
