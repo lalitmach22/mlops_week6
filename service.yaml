@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iris-api-service
+  labels:
+    app: iris-api
+  annotations:
+    cloud.google.com/backend-config: '{"default": "iris-api-backendconfig"}'
+spec:
+  type: LoadBalancer
+  selector:
+    app: iris-api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+
+---
+# This BackendConfig is not strictly required but is a GKE best practice
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: iris-api-backendconfig
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 15
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    type: HTTP
+    # The load balancer health check can use the readiness probe
+    requestPath: /ready_check
+    port: 8200

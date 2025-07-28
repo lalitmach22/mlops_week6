@@ -84,10 +84,20 @@ nosetests.xml
 coverage.xml
 
 # ===================================================================
-# CML / CI-CD Artifacts
+# CML / CI-CD Artifacts & GCP Credentials
 # ===================================================================
 # The CML report is generated during the workflow and should not be stored in the repo.
 report.md
+
+# GCP Service Account Keys and Credentials (NEVER COMMIT THESE)
 key.json
 key_b64.txt
 encoded_key.txt
+new_key
+new_key1
+*key*.json
+*.pem
+gcp-key.json
+
+# Temporary files from CI/CD
+post.json

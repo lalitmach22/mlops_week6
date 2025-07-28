@@ -18,7 +18,6 @@ jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
-    # ✅ CORRECTED: Grant write permissions to allow CML to post a comment
     permissions:
       contents: write
     timeout-minutes: 20 # Prevent runaway jobs
@@ -87,12 +86,14 @@ jobs:
     - name: Deploy to GKE
       run: |
         echo "🚀 Deploying to GKE..."
+        # This command updates the image tag only in the deployment.yaml file
         sed -i "s|image: .*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
         
-        echo "📋 Applying updated deployment.yaml:"
-        cat deployment.yaml
-        
+        echo "📋 Applying Kubernetes manifest files..."
+        # ✅ CORRECTED: Apply each YAML file specifically to avoid errors
         kubectl apply -f deployment.yaml
+        kubectl apply -f service.yaml
+        kubectl apply -f hpa.yaml
         
         echo "⏳ Waiting for deployment rollout to complete..."
         kubectl rollout status deployment/iris-api-deployment --timeout=300s
@@ -122,6 +123,14 @@ jobs:
           echo "❌ Failed to get external IP after 6 minutes."
           exit 1
         fi
+
+        # Create a temporary file for the POST body
+        echo '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' > post.json
+
+        # Install and run wrk for load testing
+        echo "🏋️‍♀️ Running load test..."
+        sudo apt-get install -y wrk
+        LOAD_TEST_RESULTS=$(wrk -t4 -c100 -d5m -s ./wrk_script.lua http://$EXTERNAL_IP/predict/ | tee /dev/tty)
         
         echo "📝 Creating CML report..."
         echo "## ✅ Deployment Successful" > report.md
@@ -129,6 +138,11 @@ jobs:
         echo "- **Commit:** [${GITHUB_SHA::7}](${{ github.event.repository.html_url }}/commit/${{ github.sha }})" >> report.md
         echo "- **Image Tag:** \`${{ env.IMAGE_TAG_SHA }}\`" >> report.md
         echo "- **API Endpoint:** http://$EXTERNAL_IP" >> report.md
+        echo " " >> report.md
+        echo "### 🔬 Load Test Results" >> report.md
+        echo "\`\`\`" >> report.md
+        echo "$LOAD_TEST_RESULTS" >> report.md
+        echo "\`\`\`" >> report.md
         echo " " >> report.md
         echo "### Test with cURL:" >> report.md
         echo "\`\`\`bash" >> report.md

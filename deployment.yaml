@@ -5,12 +5,11 @@ metadata:
   labels:
     app: iris-api
 spec:
-  # High availability with 2 replicas
+  # The HPA will manage this, but it's good to have a starting value.
   replicas: 2
   selector:
     matchLabels:
       app: iris-api
-  # Ensure zero-downtime deployments
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -21,19 +20,19 @@ spec:
       labels:
         app: iris-api
     spec:
-      # Security best practice: run as a non-root user
+      # This service account is required for the app to send traces to Google Cloud.
+      serviceAccountName: telemetry-access
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
         - name: iris-api
-          # This image tag will be dynamically updated by the GitHub Actions workflow
+          # This image tag is dynamically updated by the GitHub Actions workflow
           image: us-central1-docker.pkg.dev/mlopsweek1/iris-repo/iris-api:latest
           ports:
             - name: http
               containerPort: 8200
               protocol: TCP
-          # Resource requests and limits for container scheduling and protection
           resources:
             requests:
               memory: "128Mi"
@@ -41,7 +40,6 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          # Environment variables for the application
           env:
             - name: MODEL_PATH
               value: "model.joblib"
@@ -50,55 +48,13 @@ spec:
           # Probes to check the health of the application
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready_check
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live_check
               port: http
             initialDelaySeconds: 30
             periodSeconds: 20
-          startupProbe:
-            httpGet:
-              path: /health
-              port: http
-            failureThreshold: 30
-            periodSeconds: 10
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: iris-api-service
-  labels:
-    app: iris-api
-  # Annotations for GKE-specific features like BackendConfig
-  annotations:
-    cloud.google.com/backend-config: '{"default": "iris-api-backendconfig"}'
-spec:
-  type: LoadBalancer
-  selector:
-    app: iris-api
-  ports:
-    - name: http
-      protocol: TCP
-      port: 80
-      targetPort: http # Reference the named port from the deployment
-
----
-# Optional but recommended: BackendConfig for GKE Load Balancer health checks
-apiVersion: cloud.google.com/v1
-kind: BackendConfig
-metadata:
-  name: iris-api-backendconfig
-spec:
-  healthCheck:
-    checkIntervalSec: 15
-    timeoutSec: 15
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    type: HTTP
-    requestPath: /health
-    port: 8200

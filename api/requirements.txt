@@ -1,6 +1,11 @@
+#mlops_week7/api/requirements.txt
 fastapi
 uvicorn
 scikit-learn
+joblib
 numpy
 pandas
-joblib
+# New dependencies for observability
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-gcp-trace
