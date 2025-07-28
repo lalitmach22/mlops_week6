@@ -5,7 +5,6 @@ metadata:
   labels:
     app: iris-api
 spec:
-  # The HPA will manage this, but it's good to have a starting value.
   replicas: 2
   selector:
     matchLabels:
@@ -45,7 +44,7 @@ spec:
               value: "model.joblib"
             - name: PORT
               value: "8200"
-          # Probes to check the health of the application
+          # CORRECTED: Probes now point to the new, more specific health check endpoints
           readinessProbe:
             httpGet:
               path: /ready_check
