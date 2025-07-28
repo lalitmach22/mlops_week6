@@ -19,15 +19,14 @@ spec:
       labels:
         app: iris-api
     spec:
-      # This service account is required for the app to send traces to Google Cloud.
       serviceAccountName: telemetry-access
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
         - name: iris-api
-          # This image tag is dynamically updated by the GitHub Actions workflow
           image: us-central1-docker.pkg.dev/mlopsweek1/iris-repo/iris-api:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8200
@@ -44,16 +43,26 @@ spec:
               value: "model.joblib"
             - name: PORT
               value: "8200"
-          # CORRECTED: Probes now point to the new, more specific health check endpoints
+          startupProbe:
+            httpGet:
+              path: /ready_check
+              port: http
+            failureThreshold: 12
+            periodSeconds: 10
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /ready_check
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /live_check
               port: http
             initialDelaySeconds: 30
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3

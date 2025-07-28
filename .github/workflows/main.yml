@@ -28,7 +28,6 @@ jobs:
 
     - name: Decode GCP service account key
       run: |
-        echo "Strting the decoding....."
         echo "🔐 Decoding GCP credentials..."
         echo "${{ secrets.GCP_SA_KEY_B64 }}" | base64 --decode > gcp-key.json
         echo "✅ Credentials file created."
@@ -49,6 +48,16 @@ jobs:
         echo "🔗 Configuring kubectl for GKE cluster..."
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --region ${{ env.GKE_REGION }} --project ${{ env.GCP_PROJECT_ID }}
         echo "✅ GKE credentials configured."
+        
+        echo "🔧 Ensuring telemetry service account exists..."
+        # Check if service account exists, create if not
+        if ! kubectl get serviceaccount telemetry-access &>/dev/null; then
+          echo "📝 Creating telemetry-access service account..."
+          kubectl create serviceaccount telemetry-access
+          echo "✅ Service account created."
+        else
+          echo "✅ Service account already exists."
+        fi
 
     - name: Install gke-gcloud-auth-plugin
       run: |
@@ -87,17 +96,39 @@ jobs:
     - name: Deploy to GKE
       run: |
         echo "🚀 Deploying to GKE..."
-        # This command updates the image tag only in the deployment.yaml file
-        sed -i "s|image: .*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
+        
+        # Update the image tag with the SHA-based tag for proper versioning
+        echo "📝 Updating deployment image to: ${{ env.IMAGE_TAG_SHA }}"
+        sed -i "s|image: us-central1-docker.pkg.dev/mlopsweek1/iris-repo/iris-api:.*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
+        
+        # Verify the image tag was updated
+        echo "🔍 Verifying image tag update:"
+        grep "image: us-central1-docker.pkg.dev" deployment.yaml
         
         echo "📋 Applying Kubernetes manifest files..."
-        # ✅ CORRECTED: Apply each YAML file specifically to avoid errors
-        kubectl apply -f deployment.yaml
-        kubectl apply -f service.yaml
-        kubectl apply -f hpa.yaml
+        # Apply each YAML file specifically with error handling
+        kubectl apply -f deployment.yaml || { echo "❌ Failed to apply deployment.yaml"; exit 1; }
+        kubectl apply -f service.yaml || { echo "❌ Failed to apply service.yaml"; exit 1; }
+        kubectl apply -f hpa.yaml || { echo "❌ Failed to apply hpa.yaml"; exit 1; }
         
         echo "⏳ Waiting for deployment rollout to complete..."
-        kubectl rollout status deployment/iris-api-deployment --timeout=300s
+        # Increase timeout to 8 minutes to account for startup probe
+        if ! kubectl rollout status deployment/iris-api-deployment --timeout=480s; then
+          echo "❌ Deployment rollout failed. Debugging information:"
+          echo "� Deployment status:"
+          kubectl get deployment iris-api-deployment -o wide
+          echo "📦 Pod status:"
+          kubectl get pods -l app=iris-api -o wide
+          echo "📝 Recent events:"
+          kubectl get events --sort-by=.metadata.creationTimestamp --field-selector involvedObject.kind=Pod | grep iris-api | tail -10
+          echo "📜 Pod logs:"
+          kubectl logs -l app=iris-api --tail=50 --timestamps || echo "No logs available"
+          exit 1
+        fi
+        
+        echo "🔍 Checking final pod status..."
+        kubectl get pods -l app=iris-api
+        
         echo "✅ Deployment completed successfully."
 
     - name: Install CML and Report Status
