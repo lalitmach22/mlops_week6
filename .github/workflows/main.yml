@@ -21,8 +21,6 @@ jobs:
     permissions:
       contents: write
     timeout-minutes: 20 # Prevent runaway jobs
-    env:
-      USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
     steps:
     - name: Checkout repository
@@ -56,14 +54,6 @@ jobs:
         echo "🔧 Installing gke-gcloud-auth-plugin..."
         sudo apt-get update
         sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
-        
-        echo "🔧 Setting up plugin environment..."
-        echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
-        export USE_GKE_GCLOUD_AUTH_PLUGIN=True
-        
-        echo "🧪 Verifying plugin installation..."
-        gke-gcloud-auth-plugin --version || echo "Plugin version check failed, but continuing..."
-        
         echo "✅ gke-gcloud-auth-plugin installed."
 
     - name: Set up GKE credentials
@@ -72,11 +62,7 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --region ${{ env.GKE_REGION }} --project ${{ env.GCP_PROJECT_ID }}
         echo "✅ GKE credentials configured."
         
-        echo "🧪 Testing kubectl connectivity..."
-        kubectl cluster-info --request-timeout=30s
-        
         echo "🔧 Ensuring telemetry service account exists..."
-        # Check if service account exists, create if not
         if ! kubectl get serviceaccount telemetry-access &>/dev/null; then
           echo "📝 Creating telemetry-access service account..."
           kubectl create serviceaccount telemetry-access
@@ -110,26 +96,20 @@ jobs:
       run: |
         echo "🚀 Deploying to GKE..."
         
-        # Update the image tag with the SHA-based tag for proper versioning
         echo "📝 Updating deployment image to: ${{ env.IMAGE_TAG_SHA }}"
         sed -i "s|image: us-central1-docker.pkg.dev/mlopsweek1/iris-repo/iris-api:.*|image: ${{ env.IMAGE_TAG_SHA }}|g" deployment.yaml
         
-        # Verify the image tag was updated
         echo "🔍 Verifying image tag update:"
         grep "image: us-central1-docker.pkg.dev" deployment.yaml
         
         echo "📋 Applying Kubernetes manifest files..."
-        # Apply each YAML file specifically with error handling
         kubectl apply -f deployment.yaml || { echo "❌ Failed to apply deployment.yaml"; exit 1; }
         kubectl apply -f service.yaml || { echo "❌ Failed to apply service.yaml"; exit 1; }
         kubectl apply -f hpa.yaml || { echo "❌ Failed to apply hpa.yaml"; exit 1; }
         
         echo "⏳ Waiting for deployment rollout to complete..."
-        # Increase timeout to 8 minutes to account for startup probe
         if ! kubectl rollout status deployment/iris-api-deployment --timeout=480s; then
           echo "❌ Deployment rollout failed. Debugging information:"
-          echo "� Deployment status:"
-          kubectl get deployment iris-api-deployment -o wide
           echo "📦 Pod status:"
           kubectl get pods -l app=iris-api -o wide
           echo "📝 Recent events:"
@@ -139,16 +119,12 @@ jobs:
           exit 1
         fi
         
-        echo "🔍 Checking final pod status..."
-        kubectl get pods -l app=iris-api
-        
         echo "✅ Deployment completed successfully."
 
     - name: Install CML and Report Status
       env:
         REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Install CML using npm
         echo "📋 Installing CML via npm..."
         npm install -g @dvcorg/cml
         
@@ -169,13 +145,12 @@ jobs:
           exit 1
         fi
 
-        # Create a temporary file for the POST body
         echo '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}' > post.json
 
-        # Install and run wrk for load testing
         echo "🏋️‍♀️ Running load test..."
         sudo apt-get install -y wrk
-        LOAD_TEST_RESULTS=$(wrk -t4 -c100 -d5m -s ./wrk_script.lua http://$EXTERNAL_IP/predict/ | tee /dev/tty)
+        # ✅ CORRECTED: Removed "| tee /dev/tty" to prevent error in non-interactive shell
+        LOAD_TEST_RESULTS=$(wrk -t4 -c100 -d5m -s ./wrk_script.lua http://$EXTERNAL_IP/predict/)
         
         echo "📝 Creating CML report..."
         echo "## ✅ Deployment Successful" > report.md
@@ -194,7 +169,6 @@ jobs:
         echo "curl -X 'POST' 'http://$EXTERNAL_IP/predict/' -H 'Content-Type: application/json' -d '{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}'" >> report.md
         echo "\`\`\`" >> report.md
 
-        # Use npx to run the CML command
         npx @dvcorg/cml comment create report.md
         echo "✅ CML report posted."
 
