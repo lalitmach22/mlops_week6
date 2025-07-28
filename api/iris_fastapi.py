@@ -1,4 +1,4 @@
-import os, sys
+import os
 import joblib
 import pandas as pd
 from pydantic import BaseModel
@@ -7,12 +7,15 @@ from fastapi.responses import JSONResponse
 import logging
 import time
 import json
+import sys
 
 # OpenTelemetry imports for tracing
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+# ✅ ADDED: Import the FastAPI instrumentor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 # --- Observability Setup ---
 
@@ -36,15 +39,21 @@ class JsonFormatter(logging.Formatter):
 
 logger = logging.getLogger("iris-classifier")
 logger.setLevel(logging.INFO)
+# Remove existing handlers to avoid duplicate logs
 if logger.hasHandlers():
     logger.handlers.clear()
+# CORRECTED: Explicitly use sys.stdout to prevent INFO logs from being treated as errors
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(JsonFormatter())
 logger.addHandler(handler)
 
+
 # --- FastAPI Application ---
 
 app = FastAPI(title="Iris Classifier API")
+
+# ✅ ADDED: Instrument the FastAPI app to automatically create traces
+FastAPIInstrumentor.instrument_app(app)
 
 class IrisInput(BaseModel):
     sepal_length: float
@@ -61,7 +70,10 @@ async def startup_event():
     """Load the model and set app state at startup."""
     global model
     logger.info({"event": "startup_begin", "message": "Starting model loading process..."})
+    
+    # Simulate model loading time
     time.sleep(1)
+    
     logger.info({"event": "startup_check", "message": f"Checking for model at: {model_path}"})
     
     if os.path.exists(model_path):
@@ -83,6 +95,7 @@ async def startup_event():
 
 @app.get("/live_check", tags=["Probes"])
 async def liveness_probe():
+    """Liveness probe for Kubernetes."""
     if app_state["is_alive"]:
         return {"status": "alive", "timestamp": time.time()}
     logger.warning({"event": "liveness_failure", "message": "Liveness check failed"})
@@ -90,6 +103,7 @@ async def liveness_probe():
 
 @app.get("/ready_check", tags=["Probes"])
 async def readiness_probe():
+    """Readiness probe for Kubernetes."""
     if app_state["is_ready"]:
         return {"status": "ready", "model_loaded": model is not None, "timestamp": time.time()}
     logger.warning({"event": "readiness_failure", "message": f"Readiness check failed. Ready: {app_state['is_ready']}, Model: {model is not None}"})
@@ -99,6 +113,7 @@ async def readiness_probe():
 
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
+    """Middleware to add a process time header to every response."""
     start_time = time.time()
     response = await call_next(request)
     duration = round((time.time() - start_time) * 1000, 2)
@@ -107,6 +122,7 @@ async def add_process_time_header(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Global exception handler to log unhandled errors."""
     span = trace.get_current_span()
     trace_id = format(span.get_span_context().trace_id, "032x") if span.is_recording() else "not_recording"
     
@@ -125,10 +141,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/", tags=["General"])
 def read_root():
+    """Welcome message."""
     return {"message": "Welcome to the Iris Classifier API with Observability!"}
 
 @app.post("/predict/", tags=["Prediction"])
 def predict_species(data: IrisInput):
+    """Predicts the iris species from input features."""
     with tracer.start_as_current_span("model_inference") as span:
         trace_id = format(span.get_span_context().trace_id, "032x")
         
