@@ -38,7 +38,7 @@ logger = logging.getLogger("iris-classifier")
 logger.setLevel(logging.INFO)
 if logger.hasHandlers():
     logger.handlers.clear()
-handler = logging.StreamHandler()
+handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(JsonFormatter())
 logger.addHandler(handler)
 
