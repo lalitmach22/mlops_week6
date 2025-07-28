@@ -1,5 +1,3 @@
-
-
 import os
 import joblib
 import pandas as pd
@@ -38,19 +36,18 @@ class JsonFormatter(logging.Formatter):
 
 logger = logging.getLogger("iris-classifier")
 logger.setLevel(logging.INFO)
+# Remove existing handlers to avoid duplicate logs
+if logger.hasHandlers():
+    logger.handlers.clear()
 handler = logging.StreamHandler()
 handler.setFormatter(JsonFormatter())
 logger.addHandler(handler)
+
 
 # --- FastAPI Application ---
 
 app = FastAPI(title="Iris Classifier API")
 
-<<<<<<< HEAD
-print("Building api for iris model")
-# Define the input data schema using Pydantic
-=======
->>>>>>> 54de8b8 (Week 7 GA)
 class IrisInput(BaseModel):
     sepal_length: float
     sepal_width: float
@@ -163,4 +160,3 @@ def predict_species(data: IrisInput):
                 "error": str(e)
             })
             raise HTTPException(status_code=500, detail="Prediction failed during model inference.")
-        
