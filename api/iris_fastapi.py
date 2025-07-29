@@ -9,7 +9,6 @@ import time
 import json
 import sys
 
-print("This is the  app")
 # OpenTelemetry imports for tracing
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
