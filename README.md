@@ -1,539 +1,226 @@
-# MLOps Week 7: Iris Classifier API with Advanced Observability on GKE
+# MLOps: Automated CI/CD Pipeline for an Iris Classifier API
 
-## 📋 Project Overview
+This project demonstrates a complete, production-grade MLOps pipeline that automates the deployment of a machine learning model. It uses a FastAPI application, containerized with Docker, and deployed to a scalable, observable environment on Google Kubernetes Engine (GKE). The entire process is orchestrated by a GitHub Actions CI/CD workflow.
 
-This project demonstrates a **complete MLOps pipeline** for deploying a machine learning model (Iris flower classifier) as a **REST API** on **Google Kubernetes Engine (GKE)** with **advanced observability features**. The project showcases containerized deployment, automated CI/CD with GitHub Actions, comprehensive monitoring with Google Cloud Trace, structured logging, and production-ready Kubernetes orchestration with auto-scaling capabilities.
+## 🚀 Final Achievement
+
+This project successfully builds an end-to-end, automated system that takes code from a Git commit to a live, publicly accessible, scalable, and observable API on the internet. Key achievements include:
+- **Continuous Deployment**: Every push to the `main` branch automatically builds, tests, and deploys the latest version of the application with zero downtime.
+- **Scalability**: The application is deployed on GKE and configured with a Horizontal Pod Autoscaler (HPA) to automatically scale based on CPU load.
+- **Observability**: The application is instrumented with structured logging and distributed tracing (OpenTelemetry), providing deep insights into its performance and behavior in a production environment via Google Cloud Logging and Trace.
+- **Infrastructure as Code**: All application and infrastructure configurations (Docker, Kubernetes, CI/CD) are defined as code within this repository, making the setup repeatable and version-controlled.
+
+---
 
 ## 🏗️ Project Architecture
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   GitHub Repo   │───▶│  GitHub Actions  │───▶│  Google Cloud   │
-│   (Source Code) │    │   (CI/CD Pipeline)│    │   Infrastructure│
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                        │
-                                ▼                        ▼
-                        ┌──────────────────┐    ┌─────────────────┐
-                        │ Docker Registry  │    │ Google Cloud    │
-                        │ (Artifact Registry)│   │ Storage (GCS)   │
-                        └──────────────────┘    └─────────────────┘
-                                │                        │
-                                └────────┬───────────────┘
-                                         ▼
-                                ┌─────────────────┐
-                                │ Google          │
-                                │ Kubernetes      │      ┌─────────────────┐
-                                │ Engine (GKE)    │ ────▶│ Google Cloud    │
-                                │                 │      │ Trace & Logging │
-                                │ ┌─────────────┐ │      └─────────────────┘
-                                │ │ Iris API    │ │
-                                │ │ (FastAPI +  │ │      ┌─────────────────┐
-                                │ │ Observability)│ ────▶│ Load Balancer   │
-                                │ └─────────────┘ │      │ + Auto Scaling  │
-                                └─────────────────┘      └─────────────────┘
-```
-
-## 📁 Project Structure
-
-```
-mlops_week7/
-├── .github/
-│   └── workflows/
-│       └── main.yml                # GitHub Actions CI/CD pipeline
-├── api/
-│   ├── Dockerfile                 # Container configuration
-│   ├── iris_fastapi.py            # FastAPI app with observability
-│   ├── model.joblib              # Pre-trained ML model
-│   └── requirements.txt          # Python dependencies + observability libs
-├── deployment.yaml               # Kubernetes deployment with telemetry SA
-├── service.yaml                  # LoadBalancer service + BackendConfig
-├── hpa.yaml                      # Horizontal Pod Autoscaler
-├── wrk_script.lua               # Load testing script for performance
-├── deploy.MD                    # GCP setup instructions
-├── .gitignore                   # Git ignore rules
-└── key files (encoded)          # GCP service account credentials
-```
-
-## 🚀 **NEW in Week 7: Advanced Observability Features**
-
-### 📊 **Google Cloud Trace Integration**
-- **Distributed Tracing**: Every API request gets a unique trace ID for end-to-end tracking
-- **Performance Monitoring**: Detailed latency analysis for model inference
-- **Request Correlation**: Link logs and traces for better debugging
-
-### 📝 **Structured JSON Logging**
-- **Cloud-Native Format**: Logs compatible with Google Cloud Logging
-- **Rich Context**: Each log entry includes trace IDs, request details, and performance metrics
-- **Severity Levels**: Proper logging levels (INFO, WARNING, ERROR) for different events
-
-### 🔍 **Enhanced Health Monitoring**
-- **Separate Probes**: Distinct liveness (`/live_check`) and readiness (`/ready_check`) endpoints
-- **Startup Simulation**: Realistic model loading time simulation for testing
-- **State Management**: App-level state tracking for better health reporting
-
-### ⚡ **Performance Instrumentation**
-- **Request Timing**: Every response includes `X-Process-Time-ms` header
-- **Model Inference Latency**: Detailed timing for ML model predictions
-- **Load Testing**: Automated 5-minute load test with detailed performance reporting
-
-## 🔧 File Functionalities
-
-### 🚀 Core Application Files
-
-#### `api/iris_fastapi.py`
-**Enhanced with Observability Features:**
-- **OpenTelemetry Integration**: Full tracing with Google Cloud Trace
-- **Structured Logging**: JSON-formatted logs with trace correlation
-- **Health Probes**: Kubernetes-ready liveness and readiness checks
-- **Performance Monitoring**: Request timing and inference latency tracking
-- **Error Handling**: Comprehensive exception handling with trace IDs
-- **API Endpoints**:
-  - `GET /`: Welcome message
-  - `GET /live_check`: Liveness probe for Kubernetes
-  - `GET /ready_check`: Readiness probe for Kubernetes  
-  - `POST /predict/`: Iris species prediction with full observability
-
-#### `api/model.joblib`
-- **Purpose**: Pre-trained scikit-learn Decision Tree Classifier
-- **Features**: 
-  - Trained on the Iris dataset
-  - Accepts 4 features: sepal_length, sepal_width, petal_length, petal_width
-  - Classifies into 3 species: setosa, versicolor, virginica
-
-#### `api/requirements.txt`
-**Updated Dependencies for Observability:**
-- **Core FastAPI**: `fastapi`, `uvicorn`, `scikit-learn`, `joblib`, `numpy`, `pandas`
-- **Observability Stack**: 
-  - `opentelemetry-api`: Core OpenTelemetry API
-  - `opentelemetry-sdk`: OpenTelemetry SDK
-  - `opentelemetry-exporter-cloud-trace`: Google Cloud Trace integration
-
-#### `api/Dockerfile`
-- **Purpose**: Container configuration for the API
-- **Features**:
-  - Based on `python:3.10-slim` for optimal size
-  - Installs all dependencies including observability libraries
-  - Exposes port 8200 and runs FastAPI with uvicorn
-
-### ☸️ Kubernetes Configuration
-
-#### `deployment.yaml`
-**Enhanced for Observability:**
-- **Service Account**: Uses `telemetry-access` service account for Google Cloud integration
-- **Health Probes**: Updated to use new `/live_check` and `/ready_check` endpoints
-- **Resource Management**: Optimized CPU/memory requests and limits
-- **Security**: Non-root container execution
-
-#### `service.yaml`
-- **LoadBalancer**: External access with Google Cloud Load Balancer
-- **BackendConfig**: Health check configuration for load balancer
-- **Port Mapping**: External port 80 → internal port 8200
-
-#### `hpa.yaml` ⭐ **NEW**
-- **Auto-Scaling**: Horizontal Pod Autoscaler configuration
-- **Scale Range**: 2-5 replicas based on CPU utilization (50% target)
-- **High Availability**: Ensures minimum 2 replicas for redundancy
-
-#### `wrk_script.lua` ⭐ **NEW**
-- **Load Testing**: Lua script for wrk load testing tool
-- **Performance Metrics**: Detailed latency percentiles and throughput analysis
-- **Request Simulation**: POST requests to `/predict/` endpoint with sample data
-
-### 🔄 CI/CD Pipeline
-
-#### `.github/workflows/main.yml`
-**Enhanced CI/CD with Performance Testing:**
-- **Comprehensive Pipeline**:
-  1. Code checkout and GCP authentication
-  2. Model download from Google Cloud Storage
-  3. Docker build and push to Artifact Registry
-  4. Kubernetes deployment with rolling updates
-  5. **NEW**: 5-minute load testing with wrk
-  6. **NEW**: Automated performance reporting with CML
-- **Performance Testing**: Automated load test with 4 threads, 100 connections for 5 minutes
-- **Reporting**: CML-generated reports with deployment status and performance metrics
-
-### 🔐 Security & Configuration
-
-#### `deploy.MD`
-**GCP Setup Instructions:**
-- **Workload Identity**: Setup instructions for `telemetry-gsa` service account
-- **Permissions**: Google Cloud Trace agent role assignment
-- **Kubernetes Integration**: Service account binding for secure access
-
-#### `.gitignore`
-**Enhanced Security:**
-- Protects all credential files and sensitive data
-- Excludes generated reports and temporary files
-- Maintains clean repository structure
-
-## 🎯 Observability Achievement
-
-### **Complete Production Monitoring Stack:**
-
-1. **🔍 Distributed Tracing**: 
-   - Every request tracked end-to-end with Google Cloud Trace
-   - Correlation between requests, logs, and performance metrics
-   - Visual service map in Google Cloud Console
-
-2. **📊 Structured Logging**: 
-   - JSON-formatted logs compatible with Google Cloud Logging
-   - Automated log correlation with trace IDs
-   - Searchable and filterable log analysis
-
-3. **⚡ Performance Monitoring**: 
-   - Real-time latency tracking for API responses
-   - Model inference performance analysis
-   - Automated load testing with detailed reporting
-
-4. **🔧 Health Monitoring**: 
-   - Kubernetes health probes for container lifecycle management
-   - Load balancer health checks for traffic routing
-   - Application state monitoring and reporting
-
-5. **📈 Auto-Scaling**: 
-   - CPU-based horizontal pod autoscaling
-   - Automatic traffic handling during load spikes
-   - Resource optimization based on demand
-
-## 🚀 API Usage
-
-Once deployed, the API provides the following endpoints:
-
-### **Health & Monitoring Endpoints:**
-- **Liveness Check**: `GET http://<EXTERNAL_IP>/live_check`
-- **Readiness Check**: `GET http://<EXTERNAL_IP>/ready_check`
-
-### **Prediction Endpoint:**
-- **Iris Prediction**: `POST http://<EXTERNAL_IP>/predict/`
-
-### Example Prediction Request:
-```json
-{
-  "sepal_length": 5.1,
-  "sepal_width": 3.5,
-  "petal_length": 1.4,
-  "petal_width": 0.2
-}
-```
-
-### Example Response (with observability headers):
-```json
-{
-  "predicted_class": "setosa"
-}
-```
-**Headers include:**
-- `X-Process-Time-ms`: Request processing time
-- `X-Trace-Id`: Google Cloud Trace ID for request correlation
-
-## 🏋️‍♀️ Performance Testing
-
-The automated CI/CD pipeline includes comprehensive load testing:
-
-- **Test Configuration**: 4 threads, 100 concurrent connections, 5-minute duration
-- **Target Endpoint**: POST `/predict/` with realistic Iris data
-- **Metrics Collected**: Throughput, latency percentiles (50th, 90th, 99th), error rates
-- **Reporting**: Automated performance reports in GitHub PR comments
-
-## 🏆 Key MLOps Principles Demonstrated
-
-1. **Infrastructure as Code**: Complete Kubernetes manifests and Docker configuration
-2. **Observability**: Comprehensive monitoring, logging, and tracing
-3. **Automated Testing**: Health checks, load testing, and deployment verification
-4. **Continuous Deployment**: Fully automated pipeline from code to production
-5. **Model Versioning**: Model artifacts managed in Google Cloud Storage
-6. **Scalability**: Auto-scaling based on CPU utilization and traffic patterns
-7. **Security**: Workload Identity, least privilege access, secure credential management
-8. **Performance**: Latency tracking, load testing, and performance optimization
-9. **Reliability**: Health probes, rolling updates, and high availability
-10. **Monitoring**: Production-ready observability with Google Cloud operations suite
-
-## 📊 Monitoring & Observability in Production
-
-### **Google Cloud Console Integration:**
-- **Trace Timeline**: Visualize request flows and identify bottlenecks
-- **Log Explorer**: Search and analyze structured application logs
-- **Metrics Dashboard**: Monitor API performance and resource utilization
-- **Error Reporting**: Automatic error aggregation and alerting
-
-### **Performance Insights:**
-- Average response time tracking
-- Error rate monitoring
-- Resource utilization analysis
-- Auto-scaling trigger insights
-
-This project represents a **complete, production-ready MLOps pipeline** with **enterprise-grade observability** that can serve as a template for deploying machine learning models at scale in cloud environments with comprehensive monitoring and performance optimization.
-
-## 🔧 File Functionalities
-
-### 🚀 Core Application Files
-
-#### `api/iris_fastapi.py`
-- **Purpose**: Main FastAPI application serving the Iris classifier
-- **Key Features**:
-  - RESTful API with Pydantic data validation
-  - Model loading on application startup
-  - Three endpoints:
-    - `GET /`: Welcome message
-    - `GET /health`: Health check for Kubernetes probes
-    - `POST /predict/`: Iris species prediction endpoint
-  - Input validation for sepal/petal measurements
-  - Error handling for missing models
-
-#### `api/model.joblib`
-- **Purpose**: Pre-trained scikit-learn Decision Tree Classifier
-- **Features**: 
-  - Trained on the Iris dataset
-  - Accepts 4 features: sepal_length, sepal_width, petal_length, petal_width
-  - Classifies into 3 species: setosa, versicolor, virginica
-
-#### `api/requirements.txt`
-- **Purpose**: Python dependencies specification
-- **Dependencies**:
-  - `fastapi`: Web framework for building APIs
-  - `uvicorn`: ASGI server for FastAPI
-  - `scikit-learn`: Machine learning library
-  - `numpy`, `pandas`: Data manipulation
-  - `joblib`: Model serialization
-
-#### `api/Dockerfile`
-- **Purpose**: Container configuration for the API
-- **Features**:
-  - Based on `python:3.10-slim` for optimal size
-  - Installs dependencies and exposes port 8200
-  - Runs FastAPI with uvicorn server
-  - Production-ready container setup
-
-### ☸️ Kubernetes Configuration
-
-#### `deployment.yaml`
-- **Purpose**: Complete Kubernetes deployment configuration
-- **Components**:
-  1. **Deployment**: 
-     - 2 replicas for high availability
-     - Rolling update strategy for zero-downtime deployments
-     - Resource limits and requests
-     - Security context (non-root user)
-     - Health probes (readiness, liveness, startup)
-  2. **Service**: 
-     - LoadBalancer type for external access
-     - Port mapping (80 → 8200)
-  3. **BackendConfig**: 
-     - GKE-specific health check configuration
-
-### 🔄 CI/CD Pipeline
-
-#### `.github/workflows/main.yml`
-- **Purpose**: Automated CI/CD pipeline for GKE deployment
-- **Workflow Steps**:
-  1. **Code Checkout**: Download repository code
-  2. **GCP Authentication**: Decode and activate service account
-  3. **Model Download**: Fetch trained model from Google Cloud Storage
-  4. **GKE Setup**: Configure kubectl for cluster access
-  5. **Docker Operations**: Build and push images to Artifact Registry
-  6. **Deployment**: Apply Kubernetes configurations
-  7. **Verification**: Wait for deployment and get external IP
-  8. **Cleanup**: Remove sensitive credentials
-
-- **Environment Variables**:
-  - `GCP_PROJECT_ID`: mlopsweek1
-  - `GKE_CLUSTER`: mlopsweek6
-  - `GKE_REGION`: us-central1
-  - `MODEL_BUCKET_URI`: GCS path to the trained model
-
-### 🔐 Security & Configuration
-
-#### `.gitignore`
-- **Purpose**: Prevents sensitive files from being committed
-- **Protections**:
-  - Python cache files and virtual environments
-  - API keys and credentials
-  - IDE-specific files
-  - Temporary and log files
-
-#### Service Account Keys
-- **Files**: `new_key`, `new_key1`, `key.json`, etc.
-- **Purpose**: Base64-encoded GCP service account credentials
-- **Usage**: Enables GitHub Actions to authenticate with Google Cloud services
-
-## 🎯 Final Achievement
-
-### **Complete MLOps Solution Achieved:**
-
-1. **🤖 Model Serving**: 
-   - Pre-trained Iris classifier deployed as a REST API
-   - Real-time predictions via HTTP endpoints
-   - Production-ready FastAPI application
-
-2. **📦 Containerization**: 
-   - Docker-based deployment for consistency
-   - Lightweight Python container optimized for production
-
-3. **☸️ Kubernetes Orchestration**: 
-   - High-availability deployment with 2 replicas
-   - Auto-scaling and self-healing capabilities
-   - Health monitoring and zero-downtime updates
-
-4. **🔄 CI/CD Automation**: 
-   - Fully automated deployment pipeline
-   - Triggered on code commits to main branch
-   - Model synchronization from Google Cloud Storage
-
-5. **☁️ Cloud Infrastructure**: 
-   - Google Kubernetes Engine for container orchestration
-   - Google Cloud Storage for model artifacts
-   - Google Artifact Registry for container images
-
-6. **🔒 Production Security**: 
-   - Non-root container execution
-   - Service account-based authentication
-   - Secrets management through GitHub Secrets
-
-7. **📊 Monitoring & Health**: 
-   - Kubernetes health probes
-   - LoadBalancer with external IP access
-   - Automated rollout verification
-
-## 🚀 API Usage
-
-Once deployed, the API provides the following endpoints:
-
-- **Health Check**: `GET http://<EXTERNAL_IP>/health`
-- **Prediction**: `POST http://<EXTERNAL_IP>/predict/`
-
-### Example Prediction Request:
-```json
-{
-  "sepal_length": 5.1,
-  "sepal_width": 3.5,
-  "petal_length": 1.4,
-  "petal_width": 0.2
-}
-```
-
-### Example Response:
-```json
-{
-  "predicted_class": "setosa"
-}
-```
-
-## 🏆 Key MLOps Principles Demonstrated
-
-1. **Infrastructure as Code**: Kubernetes manifests and Dockerfiles
-2. **Automated Testing**: Health checks and deployment verification
-3. **Continuous Deployment**: Automated pipeline from code to production
-4. **Model Versioning**: Model artifacts stored in cloud storage
-5. **Scalability**: Kubernetes-based horizontal scaling
-6. **Monitoring**: Health probes and service monitoring
-7. **Security**: Least privilege access and secure credential management
-
-This project represents a complete, production-ready MLOps pipeline that can serve as a template for deploying machine learning models at scale in cloud environments.
-
-
-## 📝 Deployment Instructions
-
-### **Prerequisites:**
-1. Google Cloud Project with GKE API enabled
-2. GitHub repository with required secrets configured
-3. Google Cloud Storage bucket with trained model
-
-### **Setup Steps:**
-
-#### 1. **GCP Service Account Setup** (run in Google Cloud Shell):
-```bash
-# Create service account for telemetry
-gcloud iam service-accounts create telemetry-gsa \
-  --project=mlopsweek1 \
-  --display-name="Telemetry Service Account"
-
-# Grant Cloud Trace Agent permissions
-gcloud projects add-iam-policy-binding mlopsweek1 \
-  --member="serviceAccount:telemetry-gsa@mlopsweek1.iam.gserviceaccount.com" \
-  --role="roles/cloudtrace.agent"
-
-# Create Kubernetes service account
-kubectl create serviceaccount telemetry-access
-
-# Bind Kubernetes SA to Google Cloud SA (Workload Identity)
-gcloud iam service-accounts add-iam-policy-binding \
-  telemetry-gsa@mlopsweek1.iam.gserviceaccount.com \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="serviceAccount:mlopsweek1.svc.id.goog[default/telemetry-access]"
-
-# Annotate Kubernetes service account
-kubectl annotate serviceaccount telemetry-access \
-  iam.gke.io/gcp-service-account=telemetry-gsa@mlopsweek1.iam.gserviceaccount.com
-```
-
-#### 2. **GitHub Secrets Configuration:**
-Configure the following secrets in your GitHub repository:
-- `GCP_SA_KEY_B64`: Base64-encoded service account key
-
-#### 3. **Deploy:**
-Push to the `main` branch to trigger automated deployment via GitHub Actions.
-
-### **Monitoring Access:**
-- **Google Cloud Trace**: https://console.cloud.google.com/traces
-- **Google Cloud Logging**: https://console.cloud.google.com/logs
-- **GKE Workloads**: https://console.cloud.google.com/kubernetes/workload
-
-## 🔧 Local Development
-
-### **Run Locally:**
-```bash
-cd api
-pip install -r requirements.txt
-uvicorn iris_fastapi:app --host 0.0.0.0 --port 8200 --reload
-```
-
-### **Test Endpoints:**
-```bash
-# Health checks
-curl http://localhost:8200/live_check
-curl http://localhost:8200/ready_check
-
-# Prediction
-curl -X POST http://localhost:8200/predict/ \
-  -H "Content-Type: application/json" \
-  -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
-```
-
-### **Load Testing:**
-```bash
-# Install wrk
-sudo apt-get install wrk  # Ubuntu/Debian
-# or
-brew install wrk         # macOS
-
-# Run load test
-wrk -t4 -c100 -d30s -s wrk_script.lua http://localhost:8200/predict/
-```
-
-## 🐛 Troubleshooting
-
-### **Common Issues:**
-
-1. **Pod stuck in `Pending`**: Check resource quotas and node capacity
-2. **Authentication errors**: Verify Workload Identity setup and service account permissions
-3. **Model loading failures**: Ensure model file exists in GCS bucket
-4. **Trace not appearing**: Check service account has `roles/cloudtrace.agent`
-
-### **Debugging Commands:**
-```bash
-# Check pod status
-kubectl get pods -l app=iris-api
-
-# View pod logs
-kubectl logs -l app=iris-api -f
-
-# Describe deployment
-kubectl describe deployment iris-api-deployment
-
-# Check service endpoints
-kubectl get svc iris-api-service
-
-# View HPA status
-kubectl get hpa iris-api-hpa
-```
+The architecture is designed for automation, scalability, and resilience.
+
+
++-----------------+      +----------------------+      +-------------------------+
+|                 |      |                      |      |                         |
+|   Developer     +----->+    GitHub Repo       +----->+   GitHub Actions CI/CD  |
+| (git push)      |      | (main branch)        |      |   (Workflow runs)       |
+|                 |      |                      |      |                         |
++-----------------+      +----------------------+      +-------------------------+
+|
+| 1. Authenticate
+| 2. Download Model
+| 3. Build & Push Image
+| 4. Deploy to GKE
+| 5. Load Test
+v
++-------------------------+      +-------------------------+      +-------------------------+
+|                         |      |                         |      |                         |
+| Google Cloud Storage    |<-----+  Google Artifact Registry +----->+ Google Kubernetes Engine|
+| (Model Artifacts)       |      |  (Docker Images)        |      |   (GKE Cluster)         |
+|                         |      |                         |      |                         |
++-------------------------+      +-------------------------+      +-----------+-------------+
+|
+| Observability
+v
++-------------------------+-------------------------+
+|                         |                         |
+|   Google Cloud Logging  |   Google Cloud Trace    |
+|   (Structured Logs)     |   (Distributed Traces)  |
+|                         |                         |
++-------------------------+-------------------------+
+
+
+The workflow follows these steps:
+
+1.  **Code Push**: A developer pushes a code change to the `main` branch of the GitHub repository.
+2.  **Trigger GitHub Actions**: The push automatically triggers the CI/CD workflow defined in `.github/workflows/main.yml`.
+3.  **Authentication & Setup**: The workflow authenticates with Google Cloud using a service account key and sets up the necessary tools (`gcloud`, `kubectl`, `docker`).
+4.  **Build Docker Image**: A Docker image is built using the `api/Dockerfile`. This image packages the FastAPI application, all its Python dependencies, and the trained model into a self-contained, runnable unit.
+5.  **Push to Artifact Registry**: The new image is tagged with the unique commit SHA and pushed to Google Artifact Registry for secure storage and versioning.
+6.  **Deploy to GKE**: The workflow connects to the GKE cluster and applies the Kubernetes manifests (`deployment.yaml`, `service.yaml`, `hpa.yaml`), triggering a zero-downtime rolling update of the application.
+7.  **Expose & Scale**: The Kubernetes Service exposes the application via a public IP, and the HPA monitors the pods, scaling them up or down as needed.
+8.  **Load Test & Report**: The pipeline runs a `wrk` load test against the newly deployed application and posts a summary report, including the public IP and test results, as a comment on the Git commit.
+
+---
+
+## 📁 File Functionalities & Objectives
+
+Each file in this project has a specific and crucial role in the pipeline.
+
+### `api/iris_fastapi.py`
+- **Objective**: To serve the machine learning model as a robust, observable, and high-performance web API.
+- **Functionality**:
+    - Uses **FastAPI** to create a high-performance web server.
+    - Implements **OpenTelemetry** for structured logging to Google Cloud Logging and distributed tracing to Google Cloud Trace.
+    - Loads the pre-trained `model.joblib` on startup.
+    - Defines a `/predict/` endpoint for model inference.
+    - Includes `/live_check` and `/ready_check` endpoints for robust Kubernetes health probes, ensuring traffic is only sent to healthy and fully initialized application instances.
+
+### `api/Dockerfile`
+- **Objective**: To create a standardized, portable, and self-contained package of the application.
+- **Functionality**:
+    - Starts from a slim Python base image to keep the final image size small.
+    - Copies the application code and dependencies into the image.
+    - Installs the required Python libraries via `requirements.txt`.
+    - Exposes port `8200` and specifies the `uvicorn` command to start the server, making the container runnable in any Docker-compatible environment.
+
+### `api/requirements.txt`
+- **Purpose**: To define the application's Python dependencies.
+- **Functionality**: Ensures a consistent and reproducible Python environment by listing all required libraries, including `fastapi`, `pandas`, and the `opentelemetry` packages for observability.
+
+### `deployment.yaml`
+- **Objective**: To declaratively manage the application's lifecycle and health within the Kubernetes cluster.
+- **Functionality**: Defines the `Deployment` object, which manages the application's pods. It specifies the number of replicas, the container image to use (which is updated by the CI/CD pipeline), resource requests/limits, and the crucial `startupProbe`, `readinessProbe`, and `livenessProbe` for ensuring the application is healthy and resilient.
+
+### `service.yaml`
+- **Objective**: To provide a stable network endpoint to access the application from the internet.
+- **Functionality**: Defines the `Service` of type `LoadBalancer`, which tells Google Cloud to provision an external IP address and forward traffic to the application pods. It also includes a `BackendConfig` for GKE-native health checking, which integrates more efficiently with Google's load balancers.
+
+### `hpa.yaml`
+- **Objective**: To enable automatic, demand-based scaling of the application.
+- **Functionality**: Defines the `HorizontalPodAutoscaler`, which monitors the CPU utilization of the pods and automatically increases or decreases the number of replicas (between 2 and 5) to handle traffic spikes and reduce costs during idle periods.
+
+### `.github/workflows/main.yml`
+- **Objective**: To automate the entire build, test, and deployment process.
+- **Functionality**:
+    - **Trigger**: Runs on every `push` to the `main` branch.
+    - **Authentication**: Securely logs into Google Cloud using a stored secret.
+    - **Build & Push**: Runs `docker build` and `docker push` to create the application image and store it in Artifact Registry.
+    - **Deploy**: Connects to the GKE cluster and applies all `.yaml` files, triggering the rolling update.
+    - **Test & Report**: Runs a 5-minute `wrk` load test and posts a detailed summary as a comment on the commit using CML.
+
+---
+
+## 🚧 Common Roadblocks & Solutions
+
+This project involved solving several common MLOps challenges. Here is a summary of the key roadblocks and their solutions:
+
+- **Problem**: `PermissionDenied` errors when running `gcloud` commands from the VM's SSH terminal.
+  - **Solution**: The VM's default service account lacks project-level permissions. The fix was to run administrative commands (like setting IAM policies) from the **Google Cloud Shell**, which is authenticated as a user with the necessary permissions.
+
+- **Problem**: GitHub Actions failing with `failed to parse service account key JSON credentials`.
+  - **Solution**: The base64-encoded secret was corrupted by newlines. The fix was to use the `base64 -w 0 <key-file>` command to generate a single, unbroken line of text for the GitHub secret.
+
+- **Problem**: `kubectl` commands failing with `gke-gcloud-auth-plugin not found`.
+  - **Solution**: Modern GKE clusters require this plugin for authentication. The fix was to add a step to the `main.yml` workflow to explicitly install it using `sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin`.
+
+- **Problem**: Docker build failing with `Dockerfile not found` or `COPY failed`.
+  - **Solution**: This was a pathing issue. The `docker build` command in the workflow was corrected to use the `./api` directory as its context, and the `Dockerfile`'s `COPY` command was changed from `COPY app/ /app` to `COPY . .` to reflect the new context.
+
+- **Problem**: Deployment timing out with `exceeded its progress deadline`.
+  - **Solution**: The application pods were crashing or not becoming ready in time. This was solved by:
+    1.  Fixing syntax errors in `iris_fastapi.py`.
+    2.  Ensuring the health probe paths in `deployment.yaml` (`/ready_check`, `/live_check`) exactly matched the endpoints in the Python code.
+    3.  Adding a `startupProbe` to the `deployment.yaml` to give the application a longer grace period to load the model before readiness checks begin.
+
+- **Problem**: Traces not appearing in the Trace Explorer.
+  - **Solution**: This required a multi-step fix:
+    1.  Granting the user account the `Cloud Trace User` role in IAM.
+    2.  Explicitly enabling the `Cloud Trace API` on the project.
+    3.  Adding the `opentelemetry-instrumentation-fastapi` library to `requirements.txt` and instrumenting the app to automatically create traces.
+    4.  Fixing the `PermissionDenied` error from the pod by correctly configuring **Workload Identity**, linking the Kubernetes and Google service accounts with the proper IAM bindings and annotations.
+
+---
+
+## ⚙️ Running Instructions
+
+### One-Time Setup in Google Cloud
+These commands should be run once from the **Google Cloud Shell**.
+
+1.  **Enable APIs**:
+    ```bash
+    gcloud services enable container.googleapis.com artifactregistry.googleapis.com cloudtrace.googleapis.com
+    ```
+
+2.  **Create Artifact Registry Repository**:
+    ```bash
+    gcloud artifacts repositories create iris-repo --repository-format=docker --location=us-central1
+    ```
+
+3.  **Create GKE Cluster**:
+    ```bash
+    gcloud container clusters create mlopsweek6 --region us-central1 --num-nodes=2 --machine-type=e2-small
+    ```
+
+4.  **Create Service Accounts & Permissions**:
+    ```bash
+    # For the CI/CD pipeline
+    gcloud iam service-accounts create cicd-deployer --display-name="CI/CD Deployer"
+    gcloud projects add-iam-policy-binding mlopsweek1 --member="serviceAccount:cicd-deployer@mlopsweek1.iam.gserviceaccount.com" --role="roles/artifactregistry.writer"
+    gcloud projects add-iam-policy-binding mlopsweek1 --member="serviceAccount:cicd-deployer@mlopsweek1.iam.gserviceaccount.com" --role="roles/container.developer"
+    gcloud projects add-iam-policy-binding mlopsweek1 --member="serviceAccount:cicd-deployer@mlopsweek1.iam.gserviceaccount.com" --role="roles/storage.objectViewer"
+
+    # For the application's telemetry
+    gcloud iam service-accounts create telemetry-gsa --display-name="Telemetry Service Account"
+    gcloud projects add-iam-policy-binding mlopsweek1 --member="serviceAccount:telemetry-gsa@mlopsweek1.iam.gserviceaccount.com" --role="roles/cloudtrace.agent"
+    ```
+
+5.  **Configure Workload Identity**:
+    ```bash
+    # Create the in-cluster service account
+    kubectl create serviceaccount telemetry-access
+
+    # Link the GSA and KSA
+    gcloud iam service-accounts add-iam-policy-binding telemetry-gsa@mlopsweek1.iam.gserviceaccount.com --role="roles/iam.workloadIdentityUser" --member="serviceAccount:mlopsweek1.svc.id.goog[default/telemetry-access]"
+    
+    # Annotate the KSA
+    kubectl annotate serviceaccount telemetry-access --namespace default iam.gke.io/gcp-service-account=telemetry-gsa@mlopsweek1.iam.gserviceaccount.com --overwrite
+    ```
+
+### GitHub Setup
+
+1.  **Create a Service Account Key**:
+    - In the GCP Console, go to the `cicd-deployer` service account, create a new JSON key, and download it.
+
+2.  **Create GitHub Secret**:
+    - Go to your GitHub repository's **Settings > Secrets and variables > Actions**.
+    - Create a new secret named `GCP_SA_KEY_B64`.
+    - For the value, paste the base64-encoded content of the JSON key file. Use this command to encode it: `base64 -w 0 your-key-file.json`.
+
+### Deployment
+
+-   Deployment is fully automated. Simply commit and push your code to the `main` branch to trigger the workflow.
+
+### How to Test
+
+-   Find the external IP address in the CML report comment on your commit or by running `kubectl get service iris-api-service`.
+-   Use the following `curl` command to test the prediction endpoint:
+    ```bash
+    curl -X 'POST' 'http://YOUR_EXTERNAL_IP/predict/' \
+      -H 'Content-Type: application/json' \
+      -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
+    ```
+
+### Manual Load Testing (from Cloud Shell)
+
+1.  **Install `wrk`**:
+    ```bash
+    sudo apt-get update && sudo apt-get install -y wrk
+    ```
+2.  **Create a Lua script** named `post_script.lua` to define the POST request:
+    ```lua
+    wrk.method = "POST"
+    wrk.body   = '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
+    wrk.headers["Content-Type"] = "application/json"
+    ```
+3.  **Run the test** (replace `YOUR_EXTERNAL_IP`):
+    ```bash
+    wrk -t4 -c100 -d30s -s ./post_script.lua http://YOUR_EXTERNAL_IP/predict/
+    ```
