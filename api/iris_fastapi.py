@@ -8,7 +8,7 @@ import logging
 import time
 import json
 import sys
-
+print("STARTING THE APP WITH OBSERVABILITY")
 # OpenTelemetry imports for tracing
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
