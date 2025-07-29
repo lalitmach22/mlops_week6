@@ -15,19 +15,18 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.trace.sampling import AlwaysOnSampler
 
 # --- Observability Setup ---
 
 # Get the GCP Project ID from the environment variable
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 
-# Use an AlwaysOnSampler to ensure every trace is captured for debugging
-sampler = AlwaysOnSampler()
-trace.set_tracer_provider(TracerProvider(sampler=sampler))
+# ✅ CORRECTED: Removed the problematic AlwaysOnSampler. 
+# The default behavior of TracerProvider is to sample all traces.
+trace.set_tracer_provider(TracerProvider())
 tracer = trace.get_tracer(__name__)
 
-# ✅ CORRECTED: Explicitly provide the project_id to the exporter
+# Explicitly provide the project_id to the exporter
 cloud_trace_exporter = CloudTraceSpanExporter(project_id=GCP_PROJECT_ID)
 span_processor_gcp = BatchSpanProcessor(cloud_trace_exporter)
 trace.get_tracer_provider().add_span_processor(span_processor_gcp)
